@@ -216,6 +216,18 @@ async function mergeRows(tableId, rows, schema, mergeKeys) {
     return;
   }
 
+  // Deduplicate by merge keys — BigQuery MERGE requires unique keys in the source
+  const seen = new Map();
+  for (const row of rows) {
+    const key = mergeKeys.map(k => String(row[k] ?? "")).join("|");
+    seen.set(key, row); // last occurrence wins
+  }
+  const deduped = Array.from(seen.values());
+  if (deduped.length < rows.length) {
+    console.log(`ℹ️  ${tableId}: deduplicated ${rows.length} → ${deduped.length} rows`);
+  }
+  rows = deduped;
+
   const onClause  = mergeKeys.map(k => `T.\`${k}\` = S.\`${k}\``).join(" AND ");
   const updateSet = schema
     .filter(f => !mergeKeys.includes(f.name))
